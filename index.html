@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Google Maps</title>
+    <style>
+        /* 지도 크기 설정 */
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+        body, html {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        /* 현재 위치로 이동 버튼 스타일 (오른쪽 하단에 박스 형태로) */
+        #current-location-btn {
+            position: absolute;
+            bottom: 90px; /* 확대/축소 버튼 위쪽에 위치 */
+            right: 10px;
+            background-color: white;
+            border: 1px solid #ccc;
+            cursor: pointer;
+            z-index: 5;
+            padding: 10px;
+            border-radius: 5px; /* 모서리 둥글게 */
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3); /* 그림자 효과 */
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <!-- 현재 위치로 이동 버튼 -->
+    <button id="current-location-btn">현재 위치로 이동</button>
+
+    <script>
+        let map; // 지도 객체
+        let markers = []; // 생성된 마커들을 저장할 배열
+        let userLocation = null; // 사용자 위치 변수
+        let userMarker = null; // 사용자 위치 마커 변수
+
+        // 지도 초기화 함수
+        function initMap() {
+            // 사용자의 현재 위치를 받아옴
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function(position) {
+                    userLocation = {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude
+                    };
+
+                    // 지도 생성 (스트리트 뷰 컨트롤 제거)
+                    map = new google.maps.Map(document.getElementById('map'), {
+                        center: userLocation,
+                        zoom: 15,
+                        streetViewControl: false, // 스트리트 뷰 제거
+                        fullscreenControl: true // 전체 화면 보기 가능
+                    });
+
+                    // 사용자 위치 마커 추가
+                    userMarker = new google.maps.Marker({
+                        position: userLocation,
+                        map: map,
+                        title: "내 위치"
+                    });
+
+                    // 저장된 마커를 불러오기
+                    loadMarkers();
+
+                    // 클릭한 위치에 마커 추가
+                    map.addListener('click', function(event) {
+                        addMarker(event.latLng);
+                    });
+
+                    // 현재 위치로 이동하는 버튼 기능
+                    document.getElementById('current-location-btn').addEventListener('click', function() {
+                        moveToCurrentLocation();
+                    });
+                }, function() {
+                    alert("현재 위치를 찾을 수 없습니다.");
+                });
+            } else {
+                alert("Geolocation is not supported by this browser.");
+            }
+        }
+
+        // 마커를 추가하는 함수
+        function addMarker(location, defaultComment = "화장실 위치 정보 입력") {
+            // 새로운 마커 생성
+            let marker = new google.maps.Marker({
+                position: location,
+                map: map
+            });
+
+            // 정보 창 생성 및 기본 코멘트 추가
+            let infoWindow = new google.maps.InfoWindow({
+                content: `<div id="info-window-content">
+                            <textarea id="comment-input" rows="2" cols="25">${defaultComment}</textarea>
+                          </div>`
+            });
+
+            // 마커가 생성되자마자 바로 코멘트 입력창을 열기
+            infoWindow.open(map, marker);
+
+            // 마커 클릭 시 삭제 처리
+            marker.addListener('click', function() {
+                marker.setMap(null); // 마커 삭제
+                infoWindow.close();  // 정보 창 닫기
+                removeMarkerFromStorage(location); // 로컬 스토리지에서 마커 제거
+            });
+
+            // 생성된 마커를 배열에 저장 (추후 관리 용이)
+            markers.push(marker);
+            saveMarkerToStorage(location, defaultComment); // 마커 정보를 로컬 스토리지에 저장
+
+            // 코멘트를 입력할 수 있도록 focus 처리
+            setTimeout(() => {
+                document.getElementById('comment-input').focus();
+            }, 500);
+        }
+
+        // 현재 위치로 지도를 이동하는 함수
+        function moveToCurrentLocation() {
+            if (userLocation) {
+                map.setCenter(userLocation);
+                map.setZoom(15);
+            } else {
+                alert("현재 위치를 찾을 수 없습니다.");
+            }
+        }
+
+        // 마커를 로컬 스토리지에 저장하는 함수
+        function saveMarkerToStorage(location, comment) {
+            let markersData = JSON.parse(localStorage.getItem('markers')) || [];
+            markersData.push({ lat: location.lat(), lng: location.lng(), comment: comment });
+            localStorage.setItem('markers', JSON.stringify(markersData));
+        }
+
+        // 마커를 로컬 스토리지에서 제거하는 함수
+        function removeMarkerFromStorage(location) {
+            let markersData = JSON.parse(localStorage.getItem('markers')) || [];
+            markersData = markersData.filter(marker => marker.lat !== location.lat() || marker.lng !== location.lng());
+            localStorage.setItem('markers', JSON.stringify(markersData));
+        }
+
+        // 저장된 마커를 불러오는 함수
+        function loadMarkers() {
+            let markersData = JSON.parse(localStorage.getItem('markers')) || [];
+            markersData.forEach(markerData => {
+                let location = new google.maps.LatLng(markerData.lat, markerData.lng);
+                addMarker(location, markerData.comment);
+            });
+        }
+    </script>
+
+    <!-- Google Maps API 불러오기 (사용자 API 키로 업데이트) -->
+    <script async defer
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDfitDLW6a5B6Mmn1htvWsVu0-asgcedbY&callback=initMap">
+    </script>
+</body>
+</html>
